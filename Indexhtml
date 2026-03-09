@@ -527,7 +527,7 @@ const kTxt     = document.getElementById('kTxt');
 
 // Init
 window.addEventListener('load', () => {
-  const saved = sessionStorage.getItem('sakr5v5_key');
+  const saved = localStorage.getItem('sakr5v5_key');
   if (saved) { API_KEY = saved; setKeyActive(true); }
   else { noKeyBar.style.display = 'block'; }
 });
@@ -549,7 +549,7 @@ function saveKey() {
   const v = document.getElementById('keyInput').value.trim();
   if (!v.startsWith('sk-')) { alert('مفتاح غير صحيح — يجب أن يبدأ بـ sk-'); return; }
   API_KEY = v;
-  sessionStorage.setItem('sakr5v5_key', v);
+  localStorage.setItem('sakr5v5_key', v);
   setKeyActive(true);
   closeModal();
   addMsg('ai', '✅ تم تفعيل SAKR5 v5.0 بنجاح! أنا جاهز لمساعدتك 🦅');
