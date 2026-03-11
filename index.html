@@ -423,11 +423,11 @@ textarea::placeholder { color: var(--text-muted); }
   <nav class="topbar">
     <button class="model-pill">
       <div class="status-dot"></div>
-      Llama 3.3 · Groq
+      GIZ · Groq
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
     </button>
     <div class="topbar-right">
-      <button class="key-btn">🔑 تغيير المفتاح</button>
+      <button class="key-btn" onclick="showKeyModal()">🔑 تغيير المفتاح</button>
       <button class="icon-btn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
       </button>
@@ -439,7 +439,7 @@ textarea::placeholder { color: var(--text-muted); }
       <div class="welcome-icon">🧠</div>
       <h1>مرحباً، كيف أساعدك؟</h1>
       <p>مساعد ذكاء اصطناعي مجاني وسريع — يحل، يبحث، يناقش، ويصمم.</p>
-      <p class="welcome-sub">يعمل بنموذج <strong>Llama 3.3</strong> عبر Groq.</p>
+      <p class="welcome-sub">يعمل بنموذج <strong>GIZ</strong> عبر Groq.</p>
 
       <div class="mode-tabs">
         <button class="mode-tab active" onclick="setMode(this)">🌐 عام</button>
@@ -503,7 +503,31 @@ textarea::placeholder { color: var(--text-muted); }
 
 <script>
 let count = 0;
+let apiKey = localStorage.getItem('groq_key') || '';
+let history = [];
+const MODEL = 'mixtral-8x7b-32768';
 
+// --- KEY MODAL ---
+function showKeyModal() {
+  document.getElementById('keyModal').style.display = 'flex';
+  document.getElementById('keyInput').focus();
+}
+function closeKeyModal() {
+  document.getElementById('keyModal').style.display = 'none';
+}
+function saveKey() {
+  const k = document.getElementById('keyInput').value.trim();
+  if (!k) return;
+  apiKey = k;
+  localStorage.setItem('groq_key', k);
+  closeKeyModal();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!apiKey) showKeyModal();
+});
+
+// --- MODES ---
 function setMode(el) {
   document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
@@ -524,15 +548,23 @@ function handleKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }
 
-function sendMessage() {
+// --- SEND MESSAGE ---
+async function sendMessage() {
   const input = document.getElementById('msgInput');
   const text = input.value.trim();
   if (!text) return;
 
+  if (!apiKey) { showKeyModal(); return; }
+
   document.getElementById('welcome').style.display = 'none';
   const msgs = document.getElementById('messages');
   count++;
+  const myCount = count;
 
+  // Add to history
+  history.push({ role: 'user', content: text });
+
+  // Show user bubble
   const group = document.createElement('div');
   group.className = 'msg-group';
   group.innerHTML = `
@@ -541,40 +573,74 @@ function sendMessage() {
       <div class="bubble">${esc(text)}</div>
     </div>`;
   msgs.appendChild(group);
-
   input.value = ''; input.style.height = 'auto';
   scrollDown();
 
-  setTimeout(() => {
-    const aiGroup = document.createElement('div');
-    aiGroup.className = 'msg-group';
-    aiGroup.innerHTML = `
-      <div class="message ai">
-        <div class="avatar ai-av">🧠</div>
-        <div class="bubble" id="b${count}">
-          <div class="typing">
-            <span style="animation:blink 1s 0s infinite">●</span>
-            <span style="animation:blink 1s .2s infinite">●</span>
-            <span style="animation:blink 1s .4s infinite">●</span>
-          </div>
+  // Show typing
+  const aiGroup = document.createElement('div');
+  aiGroup.className = 'msg-group';
+  aiGroup.innerHTML = `
+    <div class="message ai">
+      <div class="avatar ai-av">🧠</div>
+      <div class="bubble" id="b${myCount}">
+        <div class="typing">
+          <span style="animation:blink 1s 0s infinite">●</span>
+          <span style="animation:blink 1s .2s infinite">●</span>
+          <span style="animation:blink 1s .4s infinite">●</span>
         </div>
-      </div>`;
-    msgs.appendChild(aiGroup);
-    scrollDown();
+      </div>
+    </div>`;
+  msgs.appendChild(aiGroup);
+  scrollDown();
 
-    setTimeout(() => {
-      const el = document.getElementById(`b${count}`);
-      if (el) {
-        const replies = [
-          'شكراً على سؤالك! هذا موضوع رائع. هل تريد أن أبدأ بالنقاط الرئيسية أم أتعمق مباشرةً في التفاصيل؟',
-          'بالتأكيد! سأجيب على استفسارك بأفضل طريقة. دعني أحلل هذا بدقة وأقدم لك إجابة شاملة ومفيدة.',
-          'سؤال رائع! إليك ما أعرفه بشكل منظم ومبسط — يمكنني التوسع في أي نقطة تريدها.',
-        ];
-        el.textContent = replies[count % replies.length];
-      }
-      scrollDown();
-    }, 1400);
-  }, 350);
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: 'system', content: 'أنت نيورا، مساعد ذكاء اصطناعي ذكي ومفيد. أجب دائماً باللغة العربية بشكل واضح ومنظم.' },
+          ...history
+        ],
+        max_tokens: 1024,
+        temperature: 0.7
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.error) {
+      throw new Error(data.error.message);
+    }
+
+    const reply = data.choices[0].message.content;
+    history.push({ role: 'assistant', content: reply });
+
+    const bubble = document.getElementById(`b${myCount}`);
+    if (bubble) {
+      bubble.innerHTML = formatReply(reply);
+    }
+
+  } catch (err) {
+    const bubble = document.getElementById(`b${myCount}`);
+    if (bubble) {
+      bubble.innerHTML = `<span style="color:#ef4444">❌ خطأ: ${esc(err.message)}</span>`;
+    }
+  }
+
+  scrollDown();
+}
+
+function formatReply(text) {
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
 }
 
 function scrollDown() {
@@ -583,8 +649,25 @@ function scrollDown() {
 }
 
 function esc(t) {
-  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 </script>
+
+<!-- KEY MODAL -->
+<div id="keyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div style="background:#fff;border-radius:20px;padding:32px;width:90%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.15);font-family:'Tajawal',sans-serif;text-align:right;">
+    <div style="font-size:28px;margin-bottom:12px;">🔑</div>
+    <h2 style="font-size:19px;font-weight:800;margin-bottom:8px;color:#1a1814;">أدخل مفتاح Groq API</h2>
+    <p style="font-size:13px;color:#6b6660;margin-bottom:20px;line-height:1.6;">احصل على مفتاحك المجاني من <a href="https://console.groq.com" target="_blank" style="color:#d97706;font-weight:700;">console.groq.com</a></p>
+    <input id="keyInput" type="password" placeholder="gsk_..." value="${apiKey}"
+      style="width:100%;padding:11px 14px;border:1.5px solid #e8e5e0;border-radius:10px;font-family:'Tajawal',sans-serif;font-size:14px;outline:none;margin-bottom:14px;direction:ltr;"
+      onkeydown="if(event.key==='Enter')saveKey()"
+      onfocus="this.style.borderColor='#d97706'" onblur="this.style.borderColor='#e8e5e0'">
+    <button onclick="saveKey()"
+      style="width:100%;padding:11px;border:none;border-radius:10px;background:#1a1814;color:#fff;font-family:'Tajawal',sans-serif;font-size:15px;font-weight:700;cursor:pointer;">
+      حفظ وبدء الاستخدام ✓
+    </button>
+  </div>
+</div>
 </body>
 </html>
